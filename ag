@@ -1,332 +1,120 @@
 #!/usr/bin/env python3
+VERSION = "1.2.0"
 """
 Tool untuk menambah akun Antigravity baru ke JSON DB.
-Flow: Google OAuth → tukar code → loadCodeAssist → insert ke ~/.agm/accounts.json.
-
-Cara pakai:
-  ag-add-account          # Interaktif
-  ag-add-account <code>   # Langsung pakai auth code (untuk automation)
 """
-import sys, os, json, hashlib, uuid, http.server, urllib.parse
+import sys, os, json, time, shutil, re, uuid, webbrowser, html, http.server
+import threading, socketserver, urllib.request, urllib.parse
 from datetime import datetime, timezone
-from urllib.request import Request, urlopen
-from urllib.parse import urlencode, urlparse, parse_qs
+from argparse import ArgumentParser
 
-from _update import check_update
-
-if '--version' in sys.argv or '-v' in sys.argv:
-    from _update import _read_local
-    print(f"Antigrafity Manager v{_read_local()}")
-    sys.exit(0)
-
-# ── Config ──
-CLIENT_ID = os.environ.get("AGM_CLIENT_ID") or ("10710060" "60591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com")
-CLIENT_SECRET = os.environ.get("AGM_CLIENT_SECRET") or ("GOCSPX-" "K58FWR486LdLJ1mLB8sXC4z6qDAf")
-REDIRECT_PORT = 18923
-REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/callback"
-SCOPES = [
-    "https://www.googleapis.com/auth/cloud-platform",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/cclog",
-    "https://www.googleapis.com/auth/experimentsandconfigs",
-]
-AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
-LOAD_CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 DB_PATH = os.path.expanduser("~/.agm/accounts.json")
+DEFAULT_CONSECUTIVE = 1
+DEFAULT_MAX_BACKUPS = 5
 
-def log(msg):
-    print(f"\033[32m✓\033[0m {msg}")
-
-def err(msg):
-    print(f"\033[31m✗\033[0m {msg}", file=sys.stderr)
-
-def api_post(url, data, headers=None):
-    """POST request, return parsed JSON."""
-    body = urlencode(data).encode()
-    h = {"Content-Type": "application/x-www-form-urlencoded"}
-    if headers:
-        h.update(headers)
-    req = Request(url, data=body, headers=h, method="POST")
-    with urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())
-
-def api_get(url, headers):
-    """GET request, return parsed JSON."""
-    req = Request(url, headers=headers)
-    with urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())
-
-def exchange_code(code):
-    """Tukar authorization code untuk tokens."""
-    data = {
-        "code": code,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "redirect_uri": REDIRECT_URI,
-        "grant_type": "authorization_code",
-    }
-    return api_post(TOKEN_URL, data)
-
-def get_user_info(access_token):
-    """Ambil info user (email, nama)."""
-    return api_get(USERINFO_URL, {"Authorization": f"Bearer {access_token}"})
-
-def load_code_assist(access_token, email):
-    """Panggil loadCodeAssist untuk daftarkan project antigravity."""
-    body = {
-        "metadata": {
-            "ideType": "ANTIGRAVITY",
-            "ideVersion": "1.107.0",
-            "platform": "LINUX_X64",
-        }
-    }
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "User-Agent": "google-api-nodejs-client/9.15.1",
-        "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-    }
-    req = Request(
-        LOAD_CODE_ASSIST_URL,
-        data=json.dumps(body).encode(),
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except Exception as e:
-        # loadCodeAssist bisa gagal tapi token tetap valid
-        log(f"loadCodeAssist: {e} (token tetap disimpan)")
-        return None
 
 def _load_db():
-    """Load JSON DB or return empty structure."""
     if os.path.exists(DB_PATH):
         with open(DB_PATH, "r") as f:
             return json.load(f)
     return {"version": 3, "accounts": [], "current_email": ""}
 
+
 def _save_db(db):
-    """Write JSON DB atomically."""
-    dir_path = os.path.dirname(DB_PATH)
-    if dir_path:
-        os.makedirs(dir_path, exist_ok=True)
-    tmp = DB_PATH + ".tmp"
-    with open(tmp, "w") as f:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    with open(DB_PATH, "w") as f:
         json.dump(db, f, indent=2)
-    os.replace(tmp, DB_PATH)
 
-def insert_to_db(token_data, email, project_id="", name=""):
-    """Insert akun baru ke JSON DB."""
+
+def _gen_id(): return uuid.uuid4().hex[:12]
+
+
+def add_account(code):
+    """Tambahkan akun dari authorization code."""
+    code = code.strip().strip("'\"")
     db = _load_db()
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    account_id = hashlib.sha256(email.encode()).hexdigest()[:16]
 
-    account = {
-        "email": email,
-        "name": name or email,
-        "provider": "antigravity",
-        "is_active": True,
-        "access_token": token_data["access_token"],
-        "refresh_token": token_data["refresh_token"],
-        "expires_at": token_data.get("expires_at", ""),
-        "scope": " ".join(SCOPES),
-        "project_id": project_id,
-        "test_status": "active",
-        "priority": 1,
-    }
+    auth_code = urllib.parse.quote(code, safe='')
+    CLIENT_ID = os.environ.get("AGM_CLIENT_ID", "PLACEHOLDER_ID")
+    CLIENT_SECRET = os.environ.get("AGM_CLIENT_SECRET", "PLACEHOLDER_SECRET")
+    redirect_uri = "http://localhost:18923/callback"
 
-    # Replace existing account with same email, or append
-    accounts = db["accounts"]
-    for i, acc in enumerate(accounts):
-        if acc.get("email") == email:
-            accounts[i] = account
-            break
+    data = urllib.parse.urlencode({
+        "code": auth_code, "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "redirect_uri": redirect_uri, "grant_type": "authorization_code"
+    }).encode()
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token", data,
+        {"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    try:
+        resp = urllib.request.urlopen(req)
+        tokens = json.loads(resp.read().decode())
+    except Exception as e:
+        print(f"[ERROR] Gagal tukar code: {e}")
+        return
+
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    if not access_token:
+        print("[ERROR] No access_token in response.")
+        return
+
+    try:
+        req2 = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        user = json.loads(urllib.request.urlopen(req2).read().decode())
+        email = user.get("email", "unknown")
+    except Exception as e:
+        print(f"[ERROR] Gagal get user info: {e}")
+        return
+
+    existing = [a for a in db["accounts"] if a.get("email") == email]
+    if existing:
+        acct = existing[0]
+        acct["access_token"] = access_token
+        acct["refresh_token"] = refresh_token or acct.get("refresh_token")
+        acct["updated_at"] = datetime.now(timezone.utc).isoformat()
+        print(f"[OK] Token diperbarui untuk {email}")
     else:
-        accounts.append(account)
+        acct = {
+            "id": _gen_id(), "email": email, "name": email,
+            "access_token": access_token, "refresh_token": refresh_token or "",
+            "expires_at": "", "is_active": True,
+            "priority": len(db["accounts"]) + 1,
+            "test_status": "unknown", "error_code": None,
+            "project_id": "", "router_id": "",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        db["accounts"].append(acct)
+        if not db.get("current_email"):
+            db["current_email"] = email
+        print(f"[OK] Akun {email} ditambahkan (id: {acct['id']})")
 
     _save_db(db)
-    return account_id, project_id
+    return acct
 
-def print_auth_url():
-    """Cetak URL otorisasi Google."""
-    params = {
-        "client_id": CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
-        "response_type": "code",
-        "scope": " ".join(SCOPES),
-        "access_type": "offline",
-        "prompt": "consent",
-    }
-    url = f"{AUTH_URL}?{urlencode(params)}"
-    print(f"\n\033[1;36mBuka link ini di browser:\033[0m\n")
-    print(f"  {url}\n")
-    print(f"\033[33mSetelah authorize, kamu akan redirect ke localhost:{REDIRECT_PORT}/callback\033[0m")
-    print(f"\033[33mKarena ini server headless, browser TIDAK bisa load localhost.\033[0m")
-    print(f"\033[33mSalin URL lengkap dari browser, lalu paste di sini.\033[0m")
-    print(f"\033[33mContoh: http://localhost:18923/callback?state=...&code=4/0Axx...&scope=...\033[0m")
-    print()
-
-def extract_code_from_url_or_raw(input_str):
-    """Ekstrak auth code dari URL redirect atau code mentah."""
-    input_str = input_str.strip()
-
-    # Coba parse sebagai URL
-    if input_str.startswith("http"):
-        parsed = urlparse(input_str)
-        qs = parse_qs(parsed.query)
-        if "code" in qs:
-            return qs["code"][0]
-
-    # Coba parse sebagai code mentah
-    if len(input_str) > 10 and not " " in input_str:
-        return input_str
-
-    return None
-
-class CallbackHandler(http.server.BaseHTTPRequestHandler):
-    """Handler untuk menerima callback OAuth."""
-    auth_code = None
-
-    def do_GET(self):
-        qs = parse_qs(urlparse(self.path).query)
-        if "code" in qs:
-            CallbackHandler.auth_code = qs["code"][0]
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            self.wfile.write(b"<h2>Otentikasi berhasil!</h2><p>Kembali ke terminal.</p>")
-        else:
-            self.send_response(400)
-            self.end_headers()
-            self.wfile.write(b"Missing code")
-
-    def log_message(self, format, *args):
-        pass  # Suppress log
-
-def run_server_mode():
-    """Jalankan local server untuk tangkap callback."""
-    server = http.server.HTTPServer(("0.0.0.0", REDIRECT_PORT), CallbackHandler)
-    server.timeout = 120
-    log(f"Menunggu callback di port {REDIRECT_PORT}...")
-    while CallbackHandler.auth_code is None:
-        server.handle_request()
-    server.server_close()
-    return CallbackHandler.auth_code
-
-def process_code(code):
-    """Proses auth code: tukar token, loadCodeAssist, insert ke DB."""
-    log("Menukar authorization code...")
-    token_resp = exchange_code(code)
-
-    access_token = token_resp["access_token"]
-    refresh_token = token_resp.get("refresh_token", "")
-    expires_in = token_resp.get("expires_in", 3599)
-    now = datetime.now(timezone.utc)
-    expires_at = (now.timestamp() + expires_in)
-    expires_at_iso = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
-
-    log("Mengambil info user...")
-    user_info = get_user_info(access_token)
-    email = user_info.get("email", "unknown")
-    name = user_info.get("name", email)
-    log(f"User: {email} ({name})")
-
-    log("Memanggil loadCodeAssist...")
-    lca_resp = load_code_assist(access_token, email)
-    project_id = ""
-    if lca_resp:
-        # Coba extract projectId dari response
-        if isinstance(lca_resp, dict):
-            project_id = lca_resp.get("cloudaicompanionProjectResourceName", "")
-            if "/" in project_id:
-                project_id = project_id.split("/")[-1]
-
-    token_data = {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "expires_at": expires_at_iso,
-        "expires_in": expires_in,
-    }
-
-    log("Menyimpan ke DB...")
-    conn_id, pid = insert_to_db(token_data, email, project_id, name)
-    if not project_id:
-        project_id = pid
-
-    print()
-    print(f"  \033[1;32mBerhasil ditambahkan!\033[0m")
-    print(f"  ID       : {conn_id[:8]}...")
-    print(f"  Email    : {email}")
-    print(f"  Project  : {project_id or '(belum terdaftar)'}")
-    print(f"  Status   : active")
-    print()
-    return conn_id
 
 def main():
-    if '--version' in sys.argv or '-v' in sys.argv:
-        VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
-        try:
-            with open(VERSION_FILE) as f:
-                ver = f.read().strip().split("=")[1].strip('"')
-        except Exception:
-            ver = "dev"
-        print(f"Antigrafity Manager v{ver}")
-        sys.exit(0)
-
+    os.environ.setdefault("TERM", "xterm")
+    if "--version" in sys.argv:
+        print(VERSION)
+        return
     if len(sys.argv) > 1:
-        # Mode manual: langsung proses code
         input_str = " ".join(sys.argv[1:])
-        code = extract_code_from_url_or_raw(input_str)
+        code = input_str.strip()
         if not code:
-            err("Gagal ekstrak auth code dari input.")
+            print("[ERROR] Masukkan authorization code.")
             sys.exit(1)
-        process_code(code)
+        add_account(code)
     else:
-        # Mode interaktif
-        print_auth_url()
+        print(f"AGM Account Manager v{VERSION}")
+        print("Gunakan: ag <authorization_code>")
+        sys.exit(1)
 
-        # Tanya: server mode atau paste manual?
-        print("\033[1mPilih mode:\033[0m")
-        print("  1) Buka browser otomatis (server mode)")
-        print("  2) Paste URL/code manual")
-        print()
-        choice = input("Pilihan [1/2]: ").strip()
-
-        if choice == "1":
-            print()
-            # Coba buka browser (mungkin gagal di headless)
-            try:
-                import webbrowser
-                params = {
-                    "client_id": CLIENT_ID,
-                    "redirect_uri": REDIRECT_URI,
-                    "response_type": "code",
-                    "scope": " ".join(SCOPES),
-                    "access_type": "offline",
-                    "prompt": "consent",
-                }
-                url = f"{AUTH_URL}?{urlencode(params)}"
-                webbrowser.open(url)
-                log("Browser dibuka.")
-            except Exception:
-                log("Tidak bisa buka browser. Buka link di atas secara manual.")
-
-            code = run_server_mode()
-            process_code(code)
-        else:
-            print()
-            raw = input("Paste URL redirect atau auth code: ").strip()
-            code = extract_code_from_url_or_raw(raw)
-            if not code:
-                err("Gagal ekstrak auth code.")
-                sys.exit(1)
-            process_code(code)
 
 if __name__ == "__main__":
-    check_update()
     main()

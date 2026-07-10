@@ -71,9 +71,9 @@ ag --version   # or agy --version / agm-web --version
 All tools support `--version` / `-v`:
 
 ```bash
-ag --version       →  Antigrafity Manager v1.0.0
-agy --version      →  Antigrafity Manager v1.0.0
-agm-web --version  →  Antigrafity Manager v1.0.0
+ag --version       →  Antigrafity Manager v1.2.0
+agy --version      →  Antigrafity Manager v1.2.0
+agm-web --version  →  Antigrafity Manager v1.2.0
 ```
 
 ---

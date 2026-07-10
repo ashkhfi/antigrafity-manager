@@ -25,8 +25,8 @@ USAGE_DB = DATA_DIR / "usage.db"
 TOKEN_FILE = Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
 ROUTER_DB = Path.home() / ".9router" / "db" / "data.sqlite"  # legacy, optional
 
-CLIENT_ID = os.environ.get("AGM_CLIENT_ID") or ("10710060" "60591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com")
-CLIENT_SECRET = os.environ.get("AGM_CLIENT_SECRET") or ("GOCSPX-" "K58FWR486LdLJ1mLB8sXC4z6qDAf")
+CLIENT_ID = os.environ.get("AGM_CLIENT_ID", "PLACEHOLDER_ID")
+CLIENT_SECRET = os.environ.get("AGM_CLIENT_SECRET", "PLACEHOLDER_SECRET")
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 LOAD_CA_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"

@@ -1,286 +1,184 @@
 #!/usr/bin/env python3
-import sys
-import os
-import subprocess
-import json
-import hashlib
-from datetime import datetime, timezone
+"""agy — Antigrafity Rotator CLI wrapper"""
+import sys, os, subprocess, json, time, urllib.request, urllib.parse, shutil
 
-from _update import check_update
-
-if '--version' in sys.argv or '-v' in sys.argv:
-    from _update import _read_local
-    print(f"Antigrafity Manager v{_read_local()}")
-    sys.exit(0)
-
-TOKEN_FILE = os.path.expanduser('~/.gemini/antigravity-cli/antigravity-oauth-token')
-DB_FILE = os.path.expanduser('~/.agm/accounts.json')
-ORIG_BIN = os.path.expanduser('~/.local/bin/agy.orig')
+VERSION = "1.2.0"
+ORIG_NAME = "agy.orig"
+AGY_ORIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), ORIG_NAME)
+DB_PATH = os.path.expanduser("~/.agm/accounts.json")
+SETTINGS_PATH = os.path.expanduser("~/.agm/settings.json")
 
 
-def _read_db():
-    if not os.path.exists(DB_FILE):
-        return {'version': 3, 'accounts': [], 'current_email': ''}
-    try:
-        with open(DB_FILE, 'r') as f:
+def _load_db():
+    if os.path.exists(DB_PATH):
+        with open(DB_PATH) as f:
             return json.load(f)
-    except Exception as e:
-        sys.stderr.write(f"[rotator] Gagal membaca DB: {e}\n")
-        return {'version': 3, 'accounts': [], 'current_email': ''}
+    return {"version": 3, "accounts": [], "current_email": ""}
 
 
-def _write_db(db):
-    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-    with open(DB_FILE, 'w') as f:
+def _save_db(db):
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    with open(DB_PATH, "w") as f:
         json.dump(db, f, indent=2)
 
 
-def _acct_to_camel(acct):
-    """Convert JSON DB account (snake_case) to camelCase dict for backward compat."""
-    mapping = {
-        'access_token': 'accessToken', 'refresh_token': 'refreshToken',
-        'expires_at': 'expiresAt', 'project_id': 'projectId',
-        'test_status': 'testStatus', 'last_error': 'lastError',
-        'error_code': 'errorCode', 'is_active': 'isActive',
-        'scope': 'scope', 'name': 'name', 'provider': 'provider',
-        'priority': 'priority',
-    }
-    result = {'email': acct.get('email', '')}
-    for snake, camel in mapping.items():
-        if snake in acct:
-            result[camel] = acct[snake]
-    return result
+def _load_settings():
+    if os.path.exists(SETTINGS_PATH):
+        with open(SETTINGS_PATH) as f:
+            return json.load(f)
+    return {}
 
 
-def get_active_tokens():
-    db = _read_db()
-    accounts = db.get('accounts', [])
-    active = []
-    for acct in accounts:
-        if acct.get('is_active') and acct.get('test_status') == 'active':
-            active.append(_acct_to_camel(acct))
-    return active
+def _save_settings(s):
+    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(s, f, indent=2)
 
 
-def update_cli_token(active_token_data):
+def selisih_waktu(tanggal_str):
+    """Hitung selisih jam dari tanggal_str ke sekarang. Negatif = expired."""
+    from datetime import datetime, timezone
+    if not tanggal_str:
+        return None
     try:
-        payload = {
-            "token": {
-                "access_token": active_token_data["accessToken"],
-                "token_type": "Bearer",
-                "refresh_token": active_token_data["refreshToken"],
-                "expiry": active_token_data["expiresAt"]
-            },
-            "auth_method": "consumer"
-        }
-        os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
-        with open(TOKEN_FILE, 'w') as f:
-            json.dump(payload, f)
-        sys.stderr.write(f"[rotator] Token berhasil dirotasi ke project: {active_token_data.get('projectId')}\n")
-        return True
-    except Exception as e:
-        sys.stderr.write(f"[rotator] Gagal menulis token: {e}\n")
-        return False
+        tgl = datetime.fromisoformat(tanggal_str)
+        if tgl.tzinfo is None:
+            tgl = tgl.replace(tzinfo=timezone.utc)
+        return (tgl - datetime.now(timezone.utc)).total_seconds() / 3600
+    except:
+        return None
+
+
+def rotate_to_next():
+    """Pilih akun terbaik berdasarkan strategi fallback."""
+    db = _load_db()
+    accounts = db.get("accounts", [])
+    if not accounts:
+        return None
+
+    current = db.get("current_email", "")
+    settings = _load_settings()
+    strategy = settings.get("fallback_strategy", "round_robin")
+    consecutive = settings.get("consecutive_use_count", 1)
+    max_backups = settings.get("max_backups", 5)
+    auto_rotate = settings.get("auto_rotate", True)
+
+    # Filter active accounts
+    active = [a for a in accounts if a.get("is_active", False)]
+    if not active:
+        # fallback ke semua
+        active = accounts
+
+    if strategy == "round_robin":
+        # Cari index current, pilih next
+        idxs = [i for i, a in enumerate(active) if a.get("email") == current]
+        if idxs:
+            idx = (idxs[0] + 1) % len(active)
+        else:
+            idx = 0
+        chosen = active[idx]
+    elif strategy == "priority":
+        sorted_accts = sorted(active, key=lambda a: a.get("priority", 999))
+        chosen = sorted_accts[0]
+    elif strategy == "random":
+        import random
+        chosen = random.choice(active)
+    elif strategy == "least_errors":
+        sorted_accts = sorted(active, key=lambda a: a.get("error_code") is not None)
+        chosen = sorted_accts[0]
+    elif strategy == "failover":
+        # Pilih yang current, kalau error pilih next
+        cur = [a for a in active if a.get("email") == current]
+        if cur and not cur[0].get("error_code"):
+            chosen = cur[0]
+        else:
+            sorted_accts = sorted(active, key=lambda a: a.get("priority", 999))
+            chosen = sorted_accts[0]
+    else:
+        chosen = active[0]
+
+    db["current_email"] = chosen["email"]
+    _save_db(db)
+    return chosen
 
 
 def rotate_and_retry(args):
-    active_tokens = get_active_tokens()
-    if not active_tokens:
-        sys.stderr.write("[rotator] Tidak ada token aktif ditemukan.\n")
+    """Rotate account, then retry the command."""
+    chosen = rotate_to_next()
+    if not chosen:
+        print("[ROTATOR] No accounts available to rotate.", file=sys.stderr)
         return None
-    token_to_use = active_tokens[0]
-    update_cli_token(token_to_use)
-    return subprocess.run([ORIG_BIN] + args)
+    email = chosen.get("email", "?")
+    print(f"[ROTATOR] Rotated to: {email}", file=sys.stderr)
 
-
-def mark_token_unavailable(access_token):
-    db = _read_db()
-    accounts = db.get('accounts', [])
-    found = False
-    for acct in accounts:
-        if acct.get('access_token') == access_token:
-            acct['test_status'] = 'unavailable'
-            acct['last_error'] = '[429]: Quota reached (marked by rotator)'
-            found = True
-            break
-    if found:
-        _write_db(db)
-        sys.stderr.write(f"[rotator] Menandai token sebagai unavailable\n")
-
-
-def get_account_by_refresh_token(refresh_token):
-    if not refresh_token:
-        return None
-    db = _read_db()
-    for acct in db.get('accounts', []):
-        if acct.get('refresh_token') == refresh_token:
-            return _acct_to_camel(acct)
-    return None
-
-
-def get_account_by_access_token(access_token):
-    if not access_token or len(access_token) < 50:
-        return None
-    db = _read_db()
-    for acct in db.get('accounts', []):
-        db_at = acct.get('access_token', '')
-        if db_at and access_token[:50] == db_at[:50]:
-            return _acct_to_camel(acct)
-    return None
-
-
-def show_status():
-    if not os.path.exists(TOKEN_FILE):
-        print("[rotator] Tidak ada token file")
-        return
-    try:
-        with open(TOKEN_FILE, 'r') as f:
-            tok = json.load(f)
-        rt = tok.get('token', {}).get('refresh_token', '')
-        at = tok.get('token', {}).get('access_token', '')
-        exp = tok.get('token', {}).get('expiry', '?')
-
-        account = get_account_by_refresh_token(rt)
-        if not account:
-            account = get_account_by_access_token(at)
-
-        if account:
-            print(f"Email:     {account['email']}")
-            print(f"Project:   {account.get('projectId', '?')}")
-            print(f"Status:    {account.get('testStatus', '?')}")
-        else:
-            print(f"Email:     (tidak ditemukan di DB)")
-            print(f"Refresh:   {rt[:20]}...")
-
-        print(f"Expiry:    {exp}")
-        print(f"Token:     {at[:12]}...{at[-6:]}" if len(at) > 18 else f"Token: {at}")
-
-        active = get_active_tokens()
-        print(f"\nTotal aktif: {len(active)} akun")
-        if active:
-            print("Urutan rotasi:")
-            for i, t in enumerate(active[:5]):
-                rtok = t.get('refreshToken', '')
-                email = get_account_by_refresh_token(rtok)
-                label = email['email'] if email else t.get('projectId', '?')
-                print(f"  {i+1}. {label}")
-            if len(active) > 5:
-                print(f"  ... +{len(active)-5} lainnya")
-    except Exception as e:
-        print(f"[rotator] Error: {e}")
-
-
-def list_accounts():
-    """Show all accounts with status."""
-    db = _read_db()
-    accounts = db.get('accounts', [])
-    if not accounts:
-        print("Tidak ada akun terdaftar.")
-        return
-    print(f"{'#':>3}  {'Email':35} {'Status':12} {'Project':25} {'Aktif':5}")
-    print("-" * 85)
-    for i, acct in enumerate(accounts, 1):
-        email = acct.get('email', '?')
-        status = acct.get('test_status', '?')
-        proj = acct.get('project_id', '')[:25]
-        aktif = "✓" if acct.get('is_active') else ""
-        print(f"{i:>3}  {email:35} {status:12} {proj:25} {aktif:5}")
-    print(f"\nTotal: {len(accounts)} akun")
-    print("Gunakan: agy --switch <email> untuk ganti akun aktif")
-
-
-def switch_account(email):
-    """Set account as active, deactivate others."""
-    if not email:
-        sys.stderr.write("[agy] Usage: agy --switch <email>\n")
+    if not os.path.exists(AGY_ORIG):
+        print("[ROTATOR] Install antigravity-cli first (agy.orig not found)", file=sys.stderr)
         sys.exit(1)
-    db = _read_db()
-    accounts = db.get('accounts', [])
-    found = False
-    for acct in accounts:
-        if acct.get('email') == email:
-            acct['is_active'] = True
-            found = True
-        else:
-            acct['is_active'] = False
-    if not found:
-        sys.stderr.write(f"[agy] Akun '{email}' tidak ditemukan. Gunakan 'agy --list' untuk lihat daftar.\n")
-        sys.exit(1)
-    _write_db(db)
-    # Update token file to this account
-    payload = {"token": {}, "auth_method": "consumer"}
-    for acct in accounts:
-        if acct.get('email') == email:
-            payload['token'] = {
-                "access_token": acct.get('access_token', ''),
-                "token_type": "Bearer",
-                "refresh_token": acct.get('refresh_token', ''),
-                "expiry": acct.get('expires_at', '')
-            }
-            break
-    os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
-    with open(TOKEN_FILE, 'w') as f:
-        json.dump(payload, f)
-    print(f"[agy] ✓ Beralih ke: {email}")
-    print(f"[agy]   Token file diperbarui. Gunakan 'agy --status' untuk verifikasi.")
+
+    # Set env for auth
+    env = os.environ.copy()
+    env["ANTIGRAVITY_ACCESS_TOKEN"] = chosen.get("access_token", "")
+    env["ANTIGRAVITY_REFRESH_TOKEN"] = chosen.get("refresh_token", "")
+
+    # Build args: lewati --rotate flag
+    cmd = [AGY_ORIG] + [a for a in args if a != "--rotate"]
+    result = subprocess.run(cmd, env=env)
+    return result
+
+
+def status():
+    """Show status of all accounts with colors."""
+    db = _load_db()
+    accounts = db.get("accounts", [])
+    current = db.get("current_email", "")
+
+    # Check agy.orig
+    orig_ok = os.path.exists(AGY_ORIG) and os.access(AGY_ORIG, os.X_OK)
+
+    print(f"AGM Rotator v{VERSION}")
+    print(f"agy.orig: {'✓' if orig_ok else '✗ not found'}")
+    print(f"Accounts: {len(accounts)} | Active: {sum(1 for a in accounts if a.get('is_active'))}")
+    print(f"Current: {current or '—'}\n")
+    for a in accounts:
+        mark = "→" if a.get("email") == current else " "
+        active = "✓" if a.get("is_active") else "✗"
+        status_ = a.get("test_status", "?")
+        err = a.get("error_code") or ""
+        hl = selisih_waktu(a.get("expires_at"))
+        hl_str = f"{hl:.0f}h" if hl is not None else "?h"
+        print(f" {mark} [{active}] {a['email']:35s} {status_:12s} {hl_str:6s} {err}")
+
+
 def main():
-    args = sys.argv[1:]
+    os.environ.setdefault("TERM", "xterm")
 
-    if '--version' in sys.argv or '-v' in sys.argv:
-        VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
-        try:
-            with open(VERSION_FILE) as f:
-                ver = f.read().strip().split("=")[1].strip('"')
-        except Exception:
-            ver = "dev"
-        print(f"Antigrafity Manager v{ver}")
-        sys.exit(0)
-
-    if args and args[0] == '--status':
-        show_status()
-        return
-    if args and args[0] == '--list':
-        list_accounts()
-        return
-    if args and args[0] == '--switch':
-        email = args[1] if len(args) > 1 else ''
-        switch_account(email)
-        return
-    if args and args[0] in ('-h', '--help'):
-        print("Usage: agy [--status|--list|--switch <email>] <command> [args]")
-        print("  --status           Tampilkan status akun aktif")
-        print("  --list             Tampilkan semua akun")
-        print("  --switch <email>   Ganti akun aktif")
-        print("  <command> [args]   Jalankan perintah dengan auto-rotate on error")
-        return
-
-    current_token = None
-    if os.path.exists(TOKEN_FILE):
-        try:
-            with open(TOKEN_FILE, 'r') as f:
-                current_token = json.load(f).get('token', {}).get('access_token')
-        except:
-            pass
-
-    if not os.path.exists(ORIG_BIN):
-        sys.stderr.write("[rotator] Install antigravity-cli first (agy.orig not found)\n")
+    if not os.path.exists(AGY_ORIG):
+        print("[ROTATOR] Install antigravity-cli first (agy.orig not found)", file=sys.stderr)
         sys.exit(1)
 
-    res = subprocess.run([ORIG_BIN] + args)
+    agy_basename = os.path.basename(sys.argv[0]) if sys.argv[0] else "agy"
 
-    if res.returncode != 0:
-        sys.stderr.write(f"[rotator] Perintah agy gagal dengan kode keluar {res.returncode}. Mencoba merotasi token...\n")
+    if "--version" in sys.argv:
+        print(f"Antigrafity Manager v{VERSION}")
+        return
 
-        if current_token:
-            mark_token_unavailable(current_token)
+    if "--status" in sys.argv or "status" in sys.argv[1:2]:
+        status()
+        return
 
-        retry_res = rotate_and_retry(args)
-        if retry_res:
-            sys.exit(retry_res.returncode)
+    if "--rotate" in sys.argv:
+        result = rotate_and_retry(sys.argv[1:])
+        if result:
+            sys.exit(result.returncode)
+        sys.exit(1)
+        return
 
-    sys.exit(res.returncode)
+    # Default: pass through to agy.orig with rotated account
+    result = rotate_and_retry(sys.argv[1:])
+    if result:
+        sys.exit(result.returncode)
+    sys.exit(1)
 
 
-if __name__ == '__main__':
-    check_update()
+if __name__ == "__main__":
     main()
