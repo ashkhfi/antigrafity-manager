@@ -163,11 +163,78 @@ def show_status():
         print(f"[rotator] Error: {e}")
 
 
+def list_accounts():
+    """Show all accounts with status."""
+    db = _read_db()
+    accounts = db.get('accounts', [])
+    if not accounts:
+        print("Tidak ada akun terdaftar.")
+        return
+    print(f"{'#':>3}  {'Email':35} {'Status':12} {'Project':25} {'Aktif':5}")
+    print("-" * 85)
+    for i, acct in enumerate(accounts, 1):
+        email = acct.get('email', '?')
+        status = acct.get('test_status', '?')
+        proj = acct.get('project_id', '')[:25]
+        aktif = "✓" if acct.get('is_active') else ""
+        print(f"{i:>3}  {email:35} {status:12} {proj:25} {aktif:5}")
+    print(f"\nTotal: {len(accounts)} akun")
+    print("Gunakan: agy --switch <email> untuk ganti akun aktif")
+
+
+def switch_account(email):
+    """Set account as active, deactivate others."""
+    if not email:
+        sys.stderr.write("[agy] Usage: agy --switch <email>\n")
+        sys.exit(1)
+    db = _read_db()
+    accounts = db.get('accounts', [])
+    found = False
+    for acct in accounts:
+        if acct.get('email') == email:
+            acct['is_active'] = True
+            found = True
+        else:
+            acct['is_active'] = False
+    if not found:
+        sys.stderr.write(f"[agy] Akun '{email}' tidak ditemukan. Gunakan 'agy --list' untuk lihat daftar.\n")
+        sys.exit(1)
+    _write_db(db)
+    # Update token file to this account
+    payload = {"token": {}, "auth_method": "consumer"}
+    for acct in accounts:
+        if acct.get('email') == email:
+            payload['token'] = {
+                "access_token": acct.get('access_token', ''),
+                "token_type": "Bearer",
+                "refresh_token": acct.get('refresh_token', ''),
+                "expiry": acct.get('expires_at', '')
+            }
+            break
+    os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
+    with open(TOKEN_FILE, 'w') as f:
+        json.dump(payload, f)
+    print(f"[agy] ✓ Beralih ke: {email}")
+    print(f"[agy]   Token file diperbarui. Gunakan 'agy --status' untuk verifikasi.")
 def main():
     args = sys.argv[1:]
 
     if args and args[0] == '--status':
         show_status()
+        return
+    if args and args[0] == '--list':
+        list_accounts()
+        return
+    if args and args[0] == '--switch':
+        email = args[1] if len(args) > 1 else ''
+        switch_account(email)
+        return
+    if args and args[0] in ('-h', '--help'):
+        print("Usage: agy [--status|--list|--switch <email>] <command> [args]")
+        print("  --status           Tampilkan status akun aktif")
+        print("  --list             Tampilkan semua akun")
+        print("  --switch <email>   Ganti akun aktif")
+        print("  <command> [args]   Jalankan perintah dengan auto-rotate on error")
         return
 
     current_token = None

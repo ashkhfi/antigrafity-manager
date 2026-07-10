@@ -52,6 +52,8 @@ Opens Google OAuth URL → authorize → paste redirect URL back → account sav
 ### Token Rotation
 ```bash
 agy --status            # Show current active account
+agy --list              # List all accounts
+agy --switch <email>    # Switch active account (no restart needed)
 agy <command> [args]    # Run command with auto-rotation on 429/errors
 ```
 

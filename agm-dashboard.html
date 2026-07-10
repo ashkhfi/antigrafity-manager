@@ -140,6 +140,7 @@ input:focus,select:focus{border-color:var(--violet);box-shadow:0 0 0 3px var(--v
     <button data-page="settings" onclick="go('settings')">Settings</button>
     <button data-page="usage" onclick="go('usage')">Usage</button>
     <button data-page="quota" onclick="go('quota')">Quota</button>
+    <button data-page="cli" onclick="go('cli')">CLI</button>
   </nav>
   <div class="spacer"></div>
   <div class="cmd-trigger" onclick="openCmd()">Search… <kbd>⌘K</kbd></div>
@@ -282,8 +283,53 @@ input:focus,select:focus{border-color:var(--violet);box-shadow:0 0 0 3px var(--v
       <div class="cd-h"><span class="cd-t">Quota Limits</span><span class="cd-s">Per-account usage vs limit</span></div>
       <div id="qLimits"></div>
     </div>
-
   </div>
+
+<div class="page" id="pg-cli" style="display:none">
+  <h1 class="stit">CLI Reference</h1><p class="ssub">Command-line tools for account management</p>
+  <div class="cd" style="margin-bottom:16px">
+    <div class="cd-h"><span class="cd-t">agy — Token Rotator</span></div>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Switch accounts, auto-rotate on errors, and run commands with automatic token rotation.</p>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agy --status</code></td><td>Show current active account and rotation queue</td></tr>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agy --list</code></td><td>List all accounts with status indicators</td></tr>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agy --switch &lt;email&gt;</code></td><td>Switch active account (no restart needed)</td></tr>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agy &lt;command&gt; [args]</code></td><td>Run command with auto-rotate on 429/error</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="cd" style="margin-bottom:16px">
+    <div class="cd-h"><span class="cd-t">ag — Add Account</span></div>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Interactive OAuth flow to add Google accounts. Supports browser callback or manual paste.</p>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">ag</code></td><td>Interactive OAuth flow (opens browser or paste URL)</td></tr>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">ag &lt;code&gt;</code></td><td>Add account using authorization code directly</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="cd">
+    <div class="cd-h"><span class="cd-t">agm-web — Dashboard</span></div>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Launch the web dashboard.</p>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agm-web</code></td><td>Start dashboard on port 8877</td></tr>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agm-web --port &lt;port&gt;</code></td><td>Start on custom port</td></tr>
+          <tr><td><code style="font-family:var(--mono);background:var(--elevated);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--violet2)">agm-web --import-9router</code></td><td>Import accounts from 9router DB on start</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <div class="tw" id="tst"></div>
 
@@ -302,12 +348,12 @@ function go(p){
   const el=$('#pg-'+p);if(el)el.style.display='';
   $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
   document.querySelector('.topbar nav').classList.remove('open');
-  if(p==='dashboard')loadDash();if(p==='accounts')loadAcct();if(p==='settings')loadSet();if(p==='usage')loadUsg();if(p==='quota')loadQuota();
+  if(p==='dashboard')loadDash();if(p==='accounts')loadAcct();if(p==='settings')loadSet();if(p==='usage')loadUsg();if(p==='quota')loadQuota();if(p==='cli')return;
 }
 const cmds=[
   {i:'📊',l:'Dashboard',h:'Overview',fn:()=>go('dashboard')},{i:'👥',l:'Accounts',h:'All accounts',fn:()=>go('accounts')},
   {i:'➕',l:'Add Account',h:'OAuth flow',fn:()=>go('add')},{i:'🔄',l:'Refresh Tokens',h:'Refresh all',fn:()=>go('refresh')},
-  {i:'⚙️',l:'Settings',h:'Configure',fn:()=>go('settings')},{i:'📈',l:'Usage',h:'Current account',fn:()=>go('usage')},{i:'📊',l:'Quota & Usage',h:'Token consumption & costs',fn:()=>go('quota')},
+  {i:'⚙️',l:'Settings',h:'Configure',fn:()=>go('settings')},{i:'📈',l:'Usage',h:'Current account',fn:()=>go('usage')},{i:'📊',l:'Quota & Usage',h:'Token consumption & costs',fn:()=>go('quota')},{i:'💻',l:'CLI Reference',h:'Command-line tools',fn:()=>go('cli')},
   {i:'🔄',l:'Sync Accounts',h:'From 9router DB',fn:()=>api('/api/sync',{method:'POST'}).then(d=>{toast('Synced '+d.accounts+' accounts');loadDash()})},
 ];
 let cSel=0;
