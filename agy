@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import json
+import hashlib
+from datetime import datetime, timezone
+
+TOKEN_FILE = os.path.expanduser('~/.gemini/antigravity-cli/antigravity-oauth-token')
+DB_FILE = os.path.expanduser('~/.agm/accounts.json')
+ORIG_BIN = os.path.expanduser('~/.local/bin/agy.orig')
+
+
+def _read_db():
+    if not os.path.exists(DB_FILE):
+        return {'version': 3, 'accounts': [], 'current_email': ''}
+    try:
+        with open(DB_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        sys.stderr.write(f"[rotator] Gagal membaca DB: {e}\n")
+        return {'version': 3, 'accounts': [], 'current_email': ''}
+
+
+def _write_db(db):
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+    with open(DB_FILE, 'w') as f:
+        json.dump(db, f, indent=2)
+
+
+def _acct_to_camel(acct):
+    """Convert JSON DB account (snake_case) to camelCase dict for backward compat."""
+    mapping = {
+        'access_token': 'accessToken', 'refresh_token': 'refreshToken',
+        'expires_at': 'expiresAt', 'project_id': 'projectId',
+        'test_status': 'testStatus', 'last_error': 'lastError',
+        'error_code': 'errorCode', 'is_active': 'isActive',
+        'scope': 'scope', 'name': 'name', 'provider': 'provider',
+        'priority': 'priority',
+    }
+    result = {'email': acct.get('email', '')}
+    for snake, camel in mapping.items():
+        if snake in acct:
+            result[camel] = acct[snake]
+    return result
+
+
+def get_active_tokens():
+    db = _read_db()
+    accounts = db.get('accounts', [])
+    active = []
+    for acct in accounts:
+        if acct.get('is_active') and acct.get('test_status') == 'active':
+            active.append(_acct_to_camel(acct))
+    return active
+
+
+def update_cli_token(active_token_data):
+    try:
+        payload = {
+            "token": {
+                "access_token": active_token_data["accessToken"],
+                "token_type": "Bearer",
+                "refresh_token": active_token_data["refreshToken"],
+                "expiry": active_token_data["expiresAt"]
+            },
+            "auth_method": "consumer"
+        }
+        os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
+        with open(TOKEN_FILE, 'w') as f:
+            json.dump(payload, f)
+        sys.stderr.write(f"[rotator] Token berhasil dirotasi ke project: {active_token_data.get('projectId')}\n")
+        return True
+    except Exception as e:
+        sys.stderr.write(f"[rotator] Gagal menulis token: {e}\n")
+        return False
+
+
+def rotate_and_retry(args):
+    active_tokens = get_active_tokens()
+    if not active_tokens:
+        sys.stderr.write("[rotator] Tidak ada token aktif ditemukan.\n")
+        return None
+    token_to_use = active_tokens[0]
+    update_cli_token(token_to_use)
+    return subprocess.run([ORIG_BIN] + args)
+
+
+def mark_token_unavailable(access_token):
+    db = _read_db()
+    accounts = db.get('accounts', [])
+    found = False
+    for acct in accounts:
+        if acct.get('access_token') == access_token:
+            acct['test_status'] = 'unavailable'
+            acct['last_error'] = '[429]: Quota reached (marked by rotator)'
+            found = True
+            break
+    if found:
+        _write_db(db)
+        sys.stderr.write(f"[rotator] Menandai token sebagai unavailable\n")
+
+
+def get_account_by_refresh_token(refresh_token):
+    if not refresh_token:
+        return None
+    db = _read_db()
+    for acct in db.get('accounts', []):
+        if acct.get('refresh_token') == refresh_token:
+            return _acct_to_camel(acct)
+    return None
+
+
+def get_account_by_access_token(access_token):
+    if not access_token or len(access_token) < 50:
+        return None
+    db = _read_db()
+    for acct in db.get('accounts', []):
+        db_at = acct.get('access_token', '')
+        if db_at and access_token[:50] == db_at[:50]:
+            return _acct_to_camel(acct)
+    return None
+
+
+def show_status():
+    if not os.path.exists(TOKEN_FILE):
+        print("[rotator] Tidak ada token file")
+        return
+    try:
+        with open(TOKEN_FILE, 'r') as f:
+            tok = json.load(f)
+        rt = tok.get('token', {}).get('refresh_token', '')
+        at = tok.get('token', {}).get('access_token', '')
+        exp = tok.get('token', {}).get('expiry', '?')
+
+        account = get_account_by_refresh_token(rt)
+        if not account:
+            account = get_account_by_access_token(at)
+
+        if account:
+            print(f"Email:     {account['email']}")
+            print(f"Project:   {account.get('projectId', '?')}")
+            print(f"Status:    {account.get('testStatus', '?')}")
+        else:
+            print(f"Email:     (tidak ditemukan di DB)")
+            print(f"Refresh:   {rt[:20]}...")
+
+        print(f"Expiry:    {exp}")
+        print(f"Token:     {at[:12]}...{at[-6:]}" if len(at) > 18 else f"Token: {at}")
+
+        active = get_active_tokens()
+        print(f"\nTotal aktif: {len(active)} akun")
+        if active:
+            print("Urutan rotasi:")
+            for i, t in enumerate(active[:5]):
+                rtok = t.get('refreshToken', '')
+                email = get_account_by_refresh_token(rtok)
+                label = email['email'] if email else t.get('projectId', '?')
+                print(f"  {i+1}. {label}")
+            if len(active) > 5:
+                print(f"  ... +{len(active)-5} lainnya")
+    except Exception as e:
+        print(f"[rotator] Error: {e}")
+
+
+def main():
+    args = sys.argv[1:]
+
+    if args and args[0] == '--status':
+        show_status()
+        return
+
+    current_token = None
+    if os.path.exists(TOKEN_FILE):
+        try:
+            with open(TOKEN_FILE, 'r') as f:
+                current_token = json.load(f).get('token', {}).get('access_token')
+        except:
+            pass
+
+    if not os.path.exists(ORIG_BIN):
+        sys.stderr.write("[rotator] Install antigravity-cli first (agy.orig not found)\n")
+        sys.exit(1)
+
+    res = subprocess.run([ORIG_BIN] + args)
+
+    if res.returncode != 0:
+        sys.stderr.write(f"[rotator] Perintah agy gagal dengan kode keluar {res.returncode}. Mencoba merotasi token...\n")
+
+        if current_token:
+            mark_token_unavailable(current_token)
+
+        retry_res = rotate_and_retry(args)
+        if retry_res:
+            sys.exit(retry_res.returncode)
+
+    sys.exit(res.returncode)
+
+
+if __name__ == '__main__':
+    main()

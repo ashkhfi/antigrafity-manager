@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AGM — Nexus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0c0c14;--surface:#13131f;--elevated:#1a1a2e;--hover:#22223a;--border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.10);--text:#e4e2ef;--muted:#7a7890;--dim:#4a4860;--violet:#8b5cf6;--violet2:#a78bfa;--violetbg:rgba(139,92,246,0.12);--green:#34d399;--greenbg:rgba(52,211,153,0.12);--amber:#fbbf24;--amberbg:rgba(251,191,36,0.12);--red:#f87171;--redbg:rgba(248,113,113,0.12);--font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--r:12px;--rs:8px;--rx:6px;--tr:all .2s cubic-bezier(.4,0,.2,1)}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{font-size:15px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+::selection{background:var(--violet);color:#fff}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--dim);border-radius:3px}
+button{font-family:var(--font);cursor:pointer;border:none;background:none;color:var(--text)}
+input,select{font-family:var(--font);background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--rx);padding:10px 14px;outline:none;transition:var(--tr)}
+input:focus,select:focus{border-color:var(--violet);box-shadow:0 0 0 3px var(--violetbg)}
+.topbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;z-index:100;gap:16px}
+.topbar .logo{font-weight:700;font-size:1.1rem;color:var(--violet2);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.topbar nav{display:flex;gap:4px;margin-left:24px}
+.topbar nav button{padding:8px 14px;border-radius:var(--rx);font-size:.83rem;font-weight:500;color:var(--muted);transition:var(--tr);position:relative}
+.topbar nav button:hover{color:var(--text);background:var(--hover)}
+.topbar nav button.active{color:var(--violet2);background:var(--violetbg)}
+.topbar nav button.active::after{content:'';position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);width:20px;height:2px;background:var(--violet);border-radius:1px}
+.topbar .spacer{flex:1}
+.cmd-trigger{display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--elevated);border:1px solid var(--border);border-radius:var(--rx);color:var(--muted);font-size:.8rem;cursor:pointer;transition:var(--tr)}
+.cmd-trigger:hover{border-color:var(--border2);color:var(--text)}
+.cmd-trigger kbd{font-family:var(--mono);font-size:.7rem;padding:2px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--dim)}
+.hamburger{display:none;width:36px;height:36px;align-items:center;justify-content:center;border-radius:var(--rx);font-size:1.3rem;color:var(--muted)}
+.hamburger:hover{background:var(--hover);color:var(--text)}
+.page{padding:80px 24px 40px;max-width:1280px;margin:0 auto;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.cmd-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:200;display:flex;justify-content:center;padding-top:120px;opacity:0;pointer-events:none;transition:opacity .15s}
+.cmd-overlay.open{opacity:1;pointer-events:all}
+.cmd-box{width:560px;max-height:420px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.5);transform:scale(0.96);transition:transform .15s}
+.cmd-overlay.open .cmd-box{transform:scale(1)}
+.cmd-input{width:100%;padding:16px 20px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:1rem;font-family:var(--font)}
+.cmd-input::placeholder{color:var(--dim)}
+.cmd-results{max-height:340px;overflow-y:auto;padding:8px}
+.cmd-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--rx);cursor:pointer;transition:var(--tr)}
+.cmd-item:hover,.cmd-item.sel{background:var(--violetbg)}
+.cmd-item .icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--rx);background:var(--elevated);font-size:.9rem;flex-shrink:0}
+.cmd-item .label{font-size:.9rem;font-weight:500}.cmd-item .hint{font-size:.75rem;color:var(--muted);margin-left:auto}
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.bento .st{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;transition:var(--tr);position:relative;overflow:hidden}
+.bento .st:hover{border-color:var(--border2);transform:translateY(-1px)}
+.bento .st .lb{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.bento .st .vl{font-size:2rem;font-weight:700;line-height:1}
+.bento .st .bar{position:absolute;bottom:0;left:0;right:0;height:3px}
+.bento .st.vi .vl{color:var(--violet2)}.bento .st.vi .bar{background:var(--violet)}
+.bento .st.gr .vl{color:var(--green)}.bento .st.gr .bar{background:var(--green)}
+.bento .st.am .vl{color:var(--amber)}.bento .st.am .bar{background:var(--amber)}
+.bento .st.rd .vl{color:var(--red)}.bento .st.rd .bar{background:var(--red)}
+.bento .wide{grid-column:span 4}
+.hbar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin-top:12px}
+.hbar div{transition:width .5s ease;border-radius:4px}
+.cd{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;transition:var(--tr)}
+.cd:hover{border-color:var(--border2)}
+.cd-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.cd-t{font-size:1rem;font-weight:600}.cd-s{font-size:.8rem;color:var(--muted)}
+.bg{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:500;white-space:nowrap}
+.bg::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.bg.gr{background:var(--greenbg);color:var(--green)}.bg.gr::before{background:var(--green)}
+.bg.am{background:var(--amberbg);color:var(--amber)}.bg.am::before{background:var(--amber)}
+.bg.rd{background:var(--redbg);color:var(--red)}.bg.rd::before{background:var(--red)}
+.bg.vi{background:var(--violetbg);color:var(--violet2)}.bg.vi::before{background:var(--violet)}
+.bg.mu{background:rgba(122,120,144,0.12);color:var(--muted)}.bg.mu::before{background:var(--muted)}
+.btn{padding:8px 18px;border-radius:var(--rs);font-size:.82rem;font-weight:500;transition:var(--tr);display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--violet);color:#fff}.btn-p:hover{background:var(--violet2);transform:translateY(-1px)}
+.btn-g{color:var(--muted);border:1px solid var(--border)}.btn-g:hover{border-color:var(--border2);color:var(--text)}
+.btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+.btn.sm{padding:5px 12px;font-size:.75rem}
+.tbl{width:100%;border-collapse:separate;border-spacing:0}
+.tbl th{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-weight:500}
+.tbl td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:.88rem;transition:var(--tr)}
+.tbl tr:hover td{background:var(--hover)}
+.tbl tr.cur td{background:var(--violetbg)}
+.fg{margin-bottom:16px}.fg label{display:block;font-size:.78rem;font-weight:500;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.fg input,.fg select{width:100%}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tg{position:relative;width:44px;height:24px;cursor:pointer}
+.tg input{opacity:0;width:0;height:0}
+.tg .sl{position:absolute;inset:0;background:var(--elevated);border:1px solid var(--border);border-radius:12px;transition:var(--tr)}
+.tg .sl::before{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:var(--muted);border-radius:50%;transition:var(--tr)}
+.tg input:checked+.sl{background:var(--violetbg);border-color:var(--violet)}
+.tg input:checked+.sl::before{transform:translateX(20px);background:var(--violet)}
+.tw{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:10px 20px;border-radius:var(--rs);font-size:.85rem;font-weight:500;animation:ti .3s ease;backdrop-filter:blur(12px);border:1px solid var(--border)}
+.toast.ok{background:rgba(52,211,153,0.15);color:var(--green);border-color:rgba(52,211,153,0.2)}
+.toast.er{background:rgba(248,113,113,0.15);color:var(--red);border-color:rgba(248,113,113,0.2)}
+@keyframes ti{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.mo{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:150;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .15s}
+.mo.open{opacity:1;pointer-events:all}
+.mo .box{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);width:520px;max-height:80vh;overflow-y:auto;padding:28px;box-shadow:0 24px 80px rgba(0,0,0,0.4);position:relative}
+.mo .box h3{font-size:1.1rem;margin-bottom:16px}
+.mo .dg{display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:.85rem}
+.mo .dg .k{color:var(--muted)}.mo .dg .v{word-break:break-all}
+.mo .mc{position:absolute;top:16px;right:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:var(--rx);color:var(--muted);font-size:1.1rem}
+.mo .mc:hover{background:var(--hover);color:var(--text)}
+.stit{font-size:1.4rem;font-weight:700;margin-bottom:4px}
+.ssub{font-size:.85rem;color:var(--muted);margin-bottom:20px}
+.tb{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.tb input{flex:1;min-width:200px}
+.fp{display:flex;gap:4px}
+.fp button{padding:6px 14px;border-radius:999px;font-size:.78rem;font-weight:500;color:var(--muted);border:1px solid var(--border);transition:var(--tr)}
+.fp button:hover{border-color:var(--border2);color:var(--text)}
+.fp button.ac{background:var(--violetbg);border-color:var(--violet);color:var(--violet2)}
+.step{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+.step:last-child{border:none}
+.sn{width:32px;height:32px;border-radius:50%;background:var(--violetbg);color:var(--violet2);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0}
+.sb h4{font-size:.9rem;margin-bottom:4px}.sb p{font-size:.82rem;color:var(--muted)}
+/* ── Tablet landscape (901-1200px) ── */
+@media(max-width:1200px){.bento{grid-template-columns:repeat(3,1fr)}}
+/* ── Tablet portrait (601-900px) ── */
+@media(max-width:900px){.bento{grid-template-columns:repeat(2,1fr)}.bento .wide{grid-column:span 2}.fr{grid-template-columns:1fr}.topbar{height:52px}.page{padding-top:68px}.bento .st .vl{font-size:1.8rem}}
+/* ── Mobile large (481-600px) ── */
+@media(max-width:600px){.topbar{height:48px}.topbar nav{display:none}.topbar nav.open{display:flex;flex-direction:column;position:fixed;top:48px;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border);padding:8px;z-index:99;max-height:calc(100vh - 48px);overflow-y:auto}.topbar nav.open button{width:100%;text-align:left;padding:14px 16px;font-size:.9rem}.hamburger{display:flex;min-width:36px;min-height:36px;align-items:center;justify-content:center}.cmd-trigger kbd{display:none}.logo span{display:none}.page{padding:64px 12px 80px}.bento{grid-template-columns:1fr 1fr;gap:10px}.bento .st{padding:14px}.bento .st .vl{font-size:1.4rem}.bento .st .lb{font-size:.7rem}.bento .wide{grid-column:span 2}.tbl{font-size:.78rem}.tbl th{padding:10px 6px}.tbl td{padding:10px 6px}.tbl .sw{position:static}.mo .box{width:calc(100% - 24px);margin:12px;padding:20px;top:40px;max-height:calc(100vh - 80px)}.tb{flex-direction:column;align-items:stretch}.tb input{min-width:unset;width:100%}.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.section-title{font-size:1.2rem}.cd{padding:14px}.cd-h{flex-wrap:wrap;gap:6px}.cd-t{font-size:.95rem}.ssub{font-size:.82rem}.hamburger span{display:flex}}
+/* ── Mobile small (≤480px) ── */
+@media(max-width:480px){.bento{grid-template-columns:1fr}.bento .wide{grid-column:span 1}.bento .st .vl{font-size:1.3rem}.bento .st .lb{font-size:.65rem}.bento .st{padding:12px 10px}.bento{grid-template-rows:auto}.page{padding:60px 8px 80px}.tbl td,.tbl th{padding:8px 4px;font-size:.72rem}.tbl th:nth-child(3),.tbl td:nth-child(3){display:none}.topbar{padding:0 8px}.logo{font-size:1rem}.cmd-trigger{padding:6px 10px;font-size:.75rem;min-width:32px;width:auto}.cd{padding:12px}.cd-h{flex-direction:column;align-items:flex-start}.stit{font-size:1.1rem}.mo .box{width:calc(100% - 12px);margin:6px;padding:16px;top:24px}.mo .box h3{font-size:1rem}.detail-row{flex-wrap:wrap;gap:4px}.page .tw table{min-width:auto}}
+/* ── Desktop large (≥1400px) ── */
+@media(min-width:1400px){.bento{grid-template-columns:repeat(4,1fr);gap:20px}.page{max-width:1400px;margin:0 auto}.bento .st .vl{font-size:2.2rem}.bento .st{padding:22px}.bento .st{min-height:100px}}
+/* ── Print ── */
+@media print{body{background:#fff;color:#000}.topbar{display:none}.cmd-trigger{display:none}.page{display:block!important;padding:0}.bento .st{border:1px solid #ccc}.cd{border:1px solid #ccc}}
+/* ── Touch devices ── */
+@media(hover:none){.topbar nav button,.cmd-trigger,.bento .st .sw,.tbl td .sw{cursor:default;-webkit-tap-highlight-color:rgba(139,92,246,0.3)}.tbl td .sw{min-height:36px}}
+</style>
+</style>
+</head>
+
+<body>
+<header class="topbar">
+  <div class="hamburger" onclick="document.querySelector('.topbar nav').classList.toggle('open')">☰</div>
+  <div class="logo"><span>⚡</span> AGM</div>
+  <nav>
+    <button class="active" data-page="dashboard" onclick="go('dashboard')">Dashboard</button>
+    <button data-page="accounts" onclick="go('accounts')">Accounts</button>
+    <button data-page="add" onclick="go('add')">Add Account</button>
+    <button data-page="refresh" onclick="go('refresh')">Refresh</button>
+    <button data-page="settings" onclick="go('settings')">Settings</button>
+    <button data-page="usage" onclick="go('usage')">Usage</button>
+    <button data-page="quota" onclick="go('quota')">Quota</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="cmd-trigger" onclick="openCmd()">Search… <kbd>⌘K</kbd></div>
+</header>
+<div class="cmd-overlay" id="cmdOv" onclick="if(event.target===this)closeCmd()">
+  <div class="cmd-box">
+    <input class="cmd-input" id="cmdIn" placeholder="Type a command or search…" oninput="filterCmd(this.value)">
+    <div class="cmd-results" id="cmdRes"></div>
+  </div>
+</div>
+<main>
+  <div class="page" id="pg-dashboard">
+    <h1 class="stit">Dashboard</h1><p class="ssub">Overview of all accounts and token health</p>
+    <div class="bento">
+      <div class="st vi"><div class="lb">Total Accounts</div><div class="vl" id="bTotal">—</div><div class="bar"></div></div>
+      <div class="st gr"><div class="lb">Active</div><div class="vl" id="bActive">—</div><div class="bar"></div></div>
+      <div class="st am"><div class="lb">Expiring</div><div class="vl" id="bExp">—</div><div class="bar"></div></div>
+      <div class="st rd"><div class="lb">Expired</div><div class="vl" id="bExd">—</div><div class="bar"></div></div>
+      <div class="cd wide" style="grid-column:span 4">
+        <div class="cd-h"><span class="cd-t">Token Health</span><span class="cd-s" id="hPct"></span></div>
+        <div class="hbar" id="hBar"><div style="width:0%;background:var(--green)"></div><div style="width:0%;background:var(--amber)"></div><div style="width:0%;background:var(--red)"></div></div>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:.78rem;color:var(--muted)"><span>● Healthy</span><span style="color:var(--amber)">● Expiring</span><span style="color:var(--red)">● Expired</span></div>
+      </div>
+    </div>
+    <div class="cd">
+      <div class="cd-h"><span class="cd-t">Accounts</span></div>
+      <div class="tb">
+        <input type="text" placeholder="Search accounts…" id="dSrch" oninput="clearTimeout(dT);dT=setTimeout(rDash,300)">
+        <div class="fp">
+          <button class="ac" onclick="dF='all';rDash();pil(this)">All</button>
+          <button onclick="dF='active';rDash();pil(this)">Active</button>
+          <button onclick="dF='expired';rDash();pil(this)">Expired</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Email</th><th>Status</th><th>Health</th><th>Project</th><th>Updated</th><th></th></tr></thead><tbody id="dBd"></tbody></table></div>
+    </div>
+  </div>
+  <div class="page" id="pg-accounts" style="display:none">
+    <h1 class="stit">Accounts</h1><p class="ssub">All configured accounts</p>
+    <div class="tb">
+      <input type="text" placeholder="Search accounts…" id="aSrch" oninput="clearTimeout(aT);aT=setTimeout(rAcct,300)">
+      <select id="aSort" onchange="rAcct()" style="padding:8px 12px;min-width:160px">
+        <option value="email">Sort by Email</option><option value="priority">Sort by Priority</option><option value="updated">Sort by Updated</option>
+      </select>
+    </div>
+    <div id="aGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px"></div>
+  </div>
+  <div class="page" id="pg-add" style="display:none">
+    <h1 class="stit">Add Account</h1><p class="ssub">Add a new Google account via OAuth 2.0</p>
+    <div class="cd" style="max-width:600px">
+      <div class="step"><div class="sn">1</div><div class="sb"><h4>Get OAuth URL</h4><p>Click below to generate an authorization URL.</p></div></div>
+      <div class="step"><div class="sn">2</div><div class="sb"><h4>Authorize</h4><p>Log in with the Google account and grant permissions.</p></div></div>
+      <div class="step"><div class="sn">3</div><div class="sb"><h4>Callback</h4><p>Google redirects to <code style="font-family:var(--mono);background:var(--elevated);padding:2px 6px;border-radius:4px;font-size:.8rem">localhost:18923/callback</code>. Account saved automatically.</p></div></div>
+      <div style="padding-top:16px;display:flex;gap:10px">
+        <button class="btn btn-p" onclick="getOAuth()">Get OAuth URL</button>
+        <a id="oLink" class="btn btn-g" style="display:none" target="_blank">Open in New Tab ↗</a>
+      </div>
+      <div id="oUrl" style="margin-top:12px;padding:12px;background:var(--bg);border-radius:var(--rx);font-family:var(--mono);font-size:.75rem;word-break:break-all;color:var(--muted);display:none"></div>
+    </div>
+  </div>
+  <div class="page" id="pg-refresh" style="display:none">
+    <h1 class="stit">Refresh Tokens</h1><p class="ssub">Refresh all account tokens</p>
+    <div class="cd" style="max-width:500px;text-align:center;padding:40px">
+      <div style="font-size:2rem;margin-bottom:12px">🔄</div>
+      <p style="color:var(--muted);margin-bottom:20px">Click below to refresh all expired tokens</p>
+      <button class="btn btn-p" id="refBtn" onclick="refAll()">Refresh All Tokens</button>
+      <div id="refRes" style="margin-top:16px;display:none"></div>
+    </div>
+  </div>
+  <div class="page" id="pg-settings" style="display:none">
+    <h1 class="stit">Settings</h1><p class="ssub">Configure fallback strategy and rotation</p>
+    <div class="cd" style="max-width:560px">
+      <div class="fg"><label>Fallback Strategy</label>
+        <select id="sStrat"><option value="round_robin">Round Robin</option><option value="priority">Priority</option><option value="random">Random</option><option value="least_errors">Least Errors</option><option value="failover">Failover</option><option value="weighted">Weighted</option></select>
+      </div>
+      <div class="fr">
+        <div class="fg"><label>Consecutive Use Count</label><input type="number" id="sCon" min="1" max="100"></div>
+        <div class="fg"><label>Max Backups</label><input type="number" id="sMax" min="1" max="100"></div>
+      </div>
+      <div class="fg" style="display:flex;align-items:center;justify-content:space-between">
+        <div><label style="margin:0">Auto Rotate</label><div style="font-size:.75rem;color:var(--muted)">Switch on token failure</div></div>
+        <label class="tg"><input type="checkbox" id="sRot"><span class="sl"></span></label>
+      </div>
+      <div style="padding-top:12px"><button class="btn btn-p" onclick="saveSet()">Save Settings</button></div>
+    </div>
+  </div>
+  <div class="page" id="pg-usage" style="display:none">
+    <h1 class="stit">Usage</h1><p class="ssub">Active account and token status</p>
+    <div class="bento" style="grid-template-columns:repeat(4,1fr)">
+      <div class="st vi wide" style="grid-column:span 4"><div class="lb">Current Active Account</div><div class="vl" id="uE" style="font-size:1.3rem;word-break:break-all">—</div><div class="bar"></div></div>
+      <div class="st gr"><div class="lb">Healthy</div><div class="vl" id="uH">0</div><div class="bar"></div></div>
+      <div class="st am"><div class="lb">Expiring</div><div class="vl" id="uX">0</div><div class="bar"></div></div>
+      <div class="st rd"><div class="lb">Expired</div><div class="vl" id="uE2">0</div><div class="bar"></div></div>
+      <div class="st" style="border-color:var(--dim)"><div class="lb">No Token</div><div class="vl" id="uN">0</div><div class="bar" style="background:var(--dim)"></div></div>
+    </div>
+    <div class="cd">
+      <div class="cd-h"><span class="cd-t">All Accounts</span></div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Email</th><th>Status</th><th>Health</th><th>Hours Left</th><th>Error</th><th></th></tr></thead><tbody id="uBd"></tbody></table></div>
+    </div>
+  </div>
+</main>
+<div class="mo" id="moOv" onclick="if(event.target===this)closeMo()">
+  <div class="box"><button class="mc" onclick="closeMo()">✕</button><div id="moBd"></div></div>
+</div>
+
+  <div class="page" id="pg-quota" style="display:none">
+    <h1 class="stit">Quota & Usage</h1>
+    <p class="ssub">Token consumption, costs, and error tracking across all accounts</p>
+    <div class="bento" style="grid-template-columns:repeat(4,1fr)">
+      <div class="st vi"><div class="lb">Total Requests</div><div class="vl" id="qReq">—</div><div class="bar"></div></div>
+      <div class="st gr"><div class="lb">Prompt Tokens</div><div class="vl" id="qPT">—</div><div class="bar"></div></div>
+      <div class="st am"><div class="lb">Completion Tokens</div><div class="vl" id="qCT">—</div><div class="bar"></div></div>
+      <div class="st rd"><div class="lb">Total Cost</div><div class="vl" id="qCost">—</div><div class="bar"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="cd">
+        <div class="cd-h"><span class="cd-t">Daily Trend</span><span class="cd-s">Last 7 days</span></div>
+        <div id="qDaily"></div>
+      </div>
+      <div class="cd">
+        <div class="cd-h"><span class="cd-t">By Model</span></div>
+        <div id="qModel"></div>
+      </div>
+    </div>
+    <div class="cd" style="margin-bottom:16px">
+      <div class="cd-h"><span class="cd-t">By Account</span><span class="cd-s">Sorted by cost</span></div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Account</th><th>Requests</th><th>Prompt Tokens</th><th>Completion Tokens</th><th>Cost</th></tr></thead>
+          <tbody id="qAcct"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="cd">
+      <div class="cd-h"><span class="cd-t">Recent Errors</span><span class="cd-s">429 / Quota Exhausted</span></div>
+      <div id="qErr"></div>
+    </div>
+
+    <div class="cd" style="margin-bottom:16px">
+      <div class="cd-h"><span class="cd-t">Quota Limits</span><span class="cd-s">Per-account usage vs limit</span></div>
+      <div id="qLimits"></div>
+    </div>
+
+  </div>
+
+<div class="tw" id="tst"></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+function api(p,o){return fetch(p,o).then(r=>r.json())}
+function toast(m,ok=true){const d=document.createElement('div');d.className='toast '+(ok?'ok':'er');d.textContent=m;$('#tst').appendChild(d);setTimeout(()=>d.remove(),3500)}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function rel(s){if(!s)return'—';const ms=Date.now()-new Date(s).getTime(),m=Math.floor(ms/60000),h=Math.floor(ms/3600000),dy=Math.floor(ms/86400000);return m<1?'just now':m<60?m+'m ago':h<24?h+'h ago':dy+'d ago'}
+function sBadge(v){return`<span class="bg ${v?'gr':'mu'}">${v?'active':'inactive'}</span>`}
+function hBadge(v){const s=(v||'unknown').toLowerCase();const c=s.includes('expir')?'am':s==='healthy'||s==='active'?'gr':'rd';return`<span class="bg ${c}">${s}</span>`}
+function pil(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('ac'));el.classList.add('ac')}
+let curPg='dashboard';
+function go(p){
+  curPg=p;document.querySelectorAll('.page').forEach(pg=>pg.style.display='none');
+  const el=$('#pg-'+p);if(el)el.style.display='';
+  $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
+  document.querySelector('.topbar nav').classList.remove('open');
+  if(p==='dashboard')loadDash();if(p==='accounts')loadAcct();if(p==='settings')loadSet();if(p==='usage')loadUsg();if(p==='quota')loadQuota();
+}
+const cmds=[
+  {i:'📊',l:'Dashboard',h:'Overview',fn:()=>go('dashboard')},{i:'👥',l:'Accounts',h:'All accounts',fn:()=>go('accounts')},
+  {i:'➕',l:'Add Account',h:'OAuth flow',fn:()=>go('add')},{i:'🔄',l:'Refresh Tokens',h:'Refresh all',fn:()=>go('refresh')},
+  {i:'⚙️',l:'Settings',h:'Configure',fn:()=>go('settings')},{i:'📈',l:'Usage',h:'Current account',fn:()=>go('usage')},{i:'📊',l:'Quota & Usage',h:'Token consumption & costs',fn:()=>go('quota')},
+  {i:'🔄',l:'Sync Accounts',h:'From 9router DB',fn:()=>api('/api/sync',{method:'POST'}).then(d=>{toast('Synced '+d.accounts+' accounts');loadDash()})},
+];
+let cSel=0;
+function openCmd(){$('#cmdOv').classList.add('open');$('#cmdIn').value='';$('#cmdIn').focus();filterCmd('')}
+function closeCmd(){$('#cmdOv').classList.remove('open')}
+function filterCmd(q){q=q.toLowerCase();cSel=0;const f=cmds.filter(c=>c.l.toLowerCase().includes(q)||c.h.toLowerCase().includes(q));$('#cmdRes').innerHTML=f.map((c,i)=>`<div class="cmd-item${i===0?' sel':''}" onclick="cmds[${cmds.indexOf(c)}].fn();closeCmd()"><div class="icon">${c.i}</div><div class="label">${c.l}</div><div class="hint">${c.h}</div></div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--muted)">No results</div>'}
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCmd()}
+  if(e.key==='Escape'){closeCmd();closeMo()}
+  if($('#cmdOv').classList.contains('open')){
+    const items=$$('#cmdRes .cmd-item');
+    if(e.key==='ArrowDown'){cSel=Math.min(cSel+1,items.length-1);items.forEach((it,i)=>it.classList.toggle('sel',i===cSel))}
+    if(e.key==='ArrowUp'){cSel=Math.max(cSel-1,0);items.forEach((it,i)=>it.classList.toggle('sel',i===cSel))}
+    if(e.key==='Enter'&&items[cSel])items[cSel].click();
+  }
+});
+
+/* Dashboard */
+let dA=[],dF='all',dT=null;
+async function loadDash(){
+  try{
+    const[st,ac,us]=await Promise.all([api('/api/stats'),api('/api/accounts'),api('/api/usage')]);
+    $('#bTotal').textContent=st.total||0;$('#bActive').textContent=st.active||0;$('#bExp').textContent=st.expiring||0;$('#bExd').textContent=st.expired||0;
+    const th=st.healthy||0,te=st.expiring||0,tx=st.expired||0,tt=th+te+tx||1;
+    const hb=$('#hBar').children;hb[0].style.width=(th/tt*100)+'%';hb[1].style.width=(te/tt*100)+'%';hb[2].style.width=(tx/tt*100)+'%';
+    $('#hPct').textContent=Math.round(th/tt*100)+'% healthy';
+    const um={};(us.accounts||[]).forEach(u=>{um[u.email]=u});
+    dA=(ac||[]).map(a=>({...a,ts:um[a.email]?.token_status||a.test_status||'unknown',ic:um[a.email]?.is_current||false,hl:um[a.email]?.hours_left}));
+    rDash();
+  }catch(e){toast('Failed to load dashboard',false)}
+}
+function rDash(){
+  let l=dA;
+  if(dF==='active')l=l.filter(a=>a.is_active);
+  if(dF==='expired')l=l.filter(a=>(a.ts||'').includes('expir')||a.test_status==='error');
+  const q=($('#dSrch')?.value||'').toLowerCase();
+  if(q)l=l.filter(a=>(a.email||'').includes(q)||(a.project_id||'').includes(q));
+  if(!l.length){$('#dBd').innerHTML='<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No accounts found</td></tr>';return}
+  $('#dBd').innerHTML=l.map(a=>`<tr class="${a.ic?'cur':''}" data-email="${esc(a.email)}" style="cursor:pointer">
+    <td style="font-family:var(--mono);font-size:.82rem">${esc(a.email)}</td>
+    <td>${sBadge(a.is_active)}</td><td>${hBadge(a.ts)}</td>
+    <td style="font-family:var(--mono);font-size:.8rem;color:var(--muted)">${esc(a.project_id||'—')}</td>
+    <td style="color:var(--muted);font-size:.82rem">${rel(a.updated_at)}</td>
+    <td onclick="event.stopPropagation()"><button class="btn btn-g sm" ${a.ic?'disabled':''} onclick="swAc('${esc(a.email)}')">Switch</button></td>
+  </tr>`).join('');
+  $$('#dBd tr').forEach(tr=>tr.addEventListener('click',()=>{const a=dA.find(x=>x.email===tr.dataset.email);if(a)showMo(a)}));
+}
+/* Accounts List */
+let aD=[],aT=null;
+async function loadAcct(){try{const d=await api('/api/accounts');aD=d||[];rAcct()}catch(e){toast('Failed',false)}}
+function rAcct(){
+  let l=[...aD];const s=$('#aSort')?.value||'email',q=($('#aSrch')?.value||'').toLowerCase();
+  if(q)l=l.filter(a=>(a.email||'').includes(q)||(a.project_id||'').includes(q));
+  if(s==='email')l.sort((a,b)=>a.email.localeCompare(b.email));
+  if(s==='priority')l.sort((a,b)=>(a.priority||0)-(b.priority||0));
+  if(s==='updated')l.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+  if(!l.length){$('#aGrid').innerHTML='<div style="text-align:center;padding:48px;color:var(--muted)">🔍 No accounts found</div>';return}
+  $('#aGrid').innerHTML=l.map(a=>`<div class="cd" style="cursor:pointer" onclick='showMo(${JSON.stringify(a).replace(/'/g,"&#39;")})'>
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+      <div style="font-family:var(--mono);font-size:.88rem;font-weight:500">${esc(a.email)}</div>${sBadge(a.is_active)}
+    </div>
+    <div style="font-family:var(--mono);font-size:.78rem;color:var(--muted);margin-bottom:8px">${esc(a.project_id||'—')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center">${hBadge(a.test_status)}<span style="font-size:.75rem;color:var(--dim)">${rel(a.updated_at)}</span></div>
+  </div>`).join('');
+}
+/* Modal */
+function showMo(a){
+  $('#moBd').innerHTML=`<h3>${esc(a.email)}</h3><div class="dg">
+    <span class="k">Status</span><span class="v">${sBadge(a.is_active)}</span>
+    <span class="k">Health</span><span class="v">${hBadge(a.test_status)}</span>
+    <span class="k">Project</span><span class="v" style="font-family:var(--mono);font-size:.82rem">${esc(a.project_id||'—')}</span>
+    <span class="k">Priority</span><span class="v">${a.priority||'—'}</span>
+    <span class="k">Token</span><span class="v" style="font-family:var(--mono);font-size:.78rem">${esc(a.access_token_masked||'—')}</span>
+    <span class="k">Refresh</span><span class="v" style="font-family:var(--mono);font-size:.78rem">${esc(a.refresh_token_masked||'—')}</span>
+    <span class="k">Expires</span><span class="v">${a.expires_at?new Date(a.expires_at).toLocaleString():'—'}</span>
+    <span class="k">Error Code</span><span class="v">${a.error_code||'—'}</span>
+    <span class="k">Router ID</span><span class="v" style="font-family:var(--mono);font-size:.78rem">${esc(a.router_id||'—')}</span>
+    <span class="k">Updated</span><span class="v">${rel(a.updated_at)}</span>
+  </div>`;$('#moOv').classList.add('open');
+}
+function closeMo(){$('#moOv').classList.remove('open')}
+/* Switch */
+async function swAc(email){if(!confirm('Switch to '+email+'?'))return;try{await api('/api/switch-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});toast('Switched to '+email);loadDash();loadUsg()}catch(e){toast('Switch failed',false)}}
+/* OAuth */
+async function getOAuth(){try{const d=await api('/api/oauth-url');$('#oUrl').style.display='block';$('#oUrl').textContent=d.url;$('#oLink').style.display='inline-flex';$('#oLink').href=d.url;toast('OAuth URL generated')}catch(e){toast('Failed',false)}}
+/* Refresh */
+async function refAll(){const b=$('#refBtn');b.disabled=true;b.textContent='Refreshing…';try{const d=await api('/api/refresh-all',{method:'POST'});$('#refRes').style.display='block';$('#refRes').innerHTML=`<span class="bg gr">${d.message||'Done'}</span>`;toast('Tokens refreshed')}catch(e){toast('Failed',false)}b.disabled=false;b.textContent='Refresh All Tokens'}
+/* Settings */
+async function loadSet(){try{const d=await api('/api/settings');$('#sStrat').value=d.fallback_strategy||'round_robin';$('#sCon').value=d.consecutive_use_count||1;$('#sMax').value=d.max_backups||5;$('#sRot').checked=!!d.auto_rotate}catch(e){toast('Failed',false)}}
+async function saveSet(){const s={fallback_strategy:$('#sStrat').value,consecutive_use_count:parseInt($('#sCon').value)||1,max_backups:parseInt($('#sMax').value)||5,auto_rotate:$('#sRot').checked};try{await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)});toast('Settings saved')}catch(e){toast('Failed',false)}}
+/* Usage */
+async function loadUsg(){
+  try{
+    const d=await api('/api/usage');$('#uE').textContent=d.current_account||'—';
+    const th=d.token_health||{};$('#uH').textContent=th.healthy||0;$('#uX').textContent=th.expiring||0;$('#uE2').textContent=th.expired||0;$('#uN').textContent=th.no_token||0;
+    const ac=d.accounts||[];
+    if(!ac.length){$('#uBd').innerHTML='<tr><td colspan="6" style="text-align:center">No accounts</td></tr>';return}
+    $('#uBd').innerHTML=ac.map(a=>`<tr class="${a.is_current?'cur':''}">
+      <td style="font-family:var(--mono);font-size:.82rem">${esc(a.email)}</td>
+      <td>${sBadge(a.is_active)}</td><td>${hBadge(a.token_status)}</td>
+      <td style="font-size:.82rem;color:${(a.hours_left||0)<0?'var(--red)':'var(--text)'}">${a.hours_left!=null?(a.hours_left<0?'Expired':Math.round(a.hours_left)+'h'):'—'}</td>
+      <td style="font-size:.82rem;color:var(--muted)">${a.error_code||'—'}</td>
+      <td><button class="btn btn-g sm" ${a.is_current?'disabled':''} onclick="swAc('${esc(a.email)}')">Switch</button></td>
+    </tr>`).join('');
+  }catch(e){toast('Failed',false)}
+}
+
+/* Quota */
+function fmtK(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n)}
+async function loadQuota(){
+  try{
+    const d=await api('/api/quota');
+    const t=d.totals||{};
+    $('#qReq').textContent=fmtK(t.requests||0);$('#qPT').textContent=fmtK(t.prompt_tokens||0);
+    $('#qCT').textContent=fmtK(t.completion_tokens||0);$('#qCost').textContent='$'+(t.cost||0).toFixed(2);
+    // Daily bar chart
+    const days=d.daily||[];
+    if(days.length){const maxReq=Math.max(...days.map(d=>d.requests),1);
+    $('#qDaily').innerHTML=days.reverse().map(day=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <span style="font-family:var(--mono);font-size:.75rem;color:var(--muted);width:60px;flex-shrink:0">${day.date.slice(5)}</span>
+      <div style="flex:1;height:20px;background:var(--elevated);border-radius:4px;overflow:hidden;display:flex">
+        <div style="width:${(day.prompt_tokens/(day.prompt_tokens+day.completion_tokens||1)*100)}%;background:var(--violet);opacity:0.6"></div>
+        <div style="width:${(day.completion_tokens/(day.prompt_tokens+day.completion_tokens||1)*100)}%;background:var(--amber);opacity:0.6"></div>
+      </div>
+      <span style="font-family:var(--mono);font-size:.75rem;width:60px;text-align:right">${fmtK(day.requests)} req</span>
+      <span style="font-family:var(--mono);font-size:.75rem;color:var(--amber);width:60px;text-align:right">$${day.cost.toFixed(2)}</span>
+    </div>`).join('')}else{$('#qDaily').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">No data</div>'}
+    // Model breakdown
+    const models=d.by_model||[];
+    if(models.length){const maxCost=Math.max(...models.map(m=>m.cost),0.01);
+    $('#qModel').innerHTML=models.map(m=>`<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-family:var(--mono);font-size:.8rem">${esc(m.model.split('|')[0])}</span>
+        <span style="font-family:var(--mono);font-size:.8rem;color:var(--amber)">$${m.cost.toFixed(2)}</span>
+      </div>
+      <div style="height:6px;background:var(--elevated);border-radius:3px;overflow:hidden">
+        <div style="width:${(m.cost/maxCost*100)}%;height:100%;background:var(--violet);border-radius:3px"></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--muted);margin-top:2px">${fmtK(m.requests)} requests · ${fmtK(m.prompt_tokens)} prompt · ${fmtK(m.completion_tokens)} completion</div>
+    </div>`).join('')}else{$('#qModel').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">No data</div>'}
+    // Account breakdown
+    const accts=d.by_account||[];
+    if(accts.length){$('#qAcct').innerHTML=accts.map(a=>`<tr>
+      <td style="font-family:var(--mono);font-size:.82rem">${esc(a.email)}</td>
+      <td>${fmtK(a.requests)}</td><td>${fmtK(a.prompt_tokens)}</td><td>${fmtK(a.completion_tokens)}</td>
+      <td style="color:var(--amber);font-weight:500">$${a.cost.toFixed(2)}</td>
+    </tr>`).join('')}else{$('#qAcct').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted)">No data</td></tr>'}
+    // Errors
+    const errs=d.errors||[];
+        // Quota Limits
+    const limits=d.quota_limits||[];
+    const ref=d.reference||{max_requests:1,max_prompt_tokens:1};
+    if(limits.length){$('#qLimits').innerHTML=limits.map(a=>{
+      const pct=a.usage_pct||0;
+      const clr=a.is_exhausted?'var(--red)':pct>80?'var(--amber)':pct>50?'var(--violet)':'var(--green)';
+      const status=a.is_exhausted?'EXHAUSTED':pct>80?'HIGH':pct>50?'MEDIUM':'OK';
+      const resetStr=a.hours_until_reset!==null?`${a.hours_until_reset}h until reset`:'';
+      return`<div style="padding:14px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+          <span style="font-family:var(--mono);font-size:.85rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.email)}</span>
+          <span style="font-family:var(--mono);font-size:.75rem;color:${clr};font-weight:600;letter-spacing:.04em">${status}</span>
+          <span style="font-family:var(--mono);font-size:.72rem;color:var(--muted)">${resetStr}</span>
+          <span style="font-family:var(--mono);font-size:.8rem;color:var(--amber)">$${a.cost.toFixed(2)}</span>
+        </div>
+        <div style="height:8px;background:var(--elevated);border-radius:4px;overflow:hidden;margin-bottom:6px">
+          <div style="width:${pct}%;height:100%;background:${clr};border-radius:4px;transition:width .6s ease"></div>
+        </div>
+        <div style="display:flex;gap:16px;font-size:.72rem;color:var(--muted)">
+          <span>${fmtK(a.requests)} / ${fmtK(ref.max_requests)} req (${Math.round(a.requests/(ref.max_requests||1)*100)}%)</span>
+          <span>${fmtK(a.prompt_tokens)} / ${fmtK(ref.max_prompt_tokens)} tokens (${Math.round(a.prompt_tokens/(ref.max_prompt_tokens||1)*100)}%)</span>
+          ${a.model?`<span>Model: ${esc(a.model)}</span>`:''}
+        </div>
+      </div>`}).join('')}else{$('#qLimits').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">No quota limit data</div>'}
+
+    if(errs.length){$('#qErr').innerHTML=errs.map(e=>`<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:.82rem">
+      <div style="display:flex;justify-content:space-between"><span style="font-family:var(--mono)">${esc(e.email)}</span><span style="color:var(--muted)">${rel(e.timestamp)}</span></div>
+      <div style="color:var(--red);margin-top:4px;font-size:.78rem">${esc(e.message)}</div>
+    </div>`).join('')}else{$('#qErr').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">No recent errors</div>'}
+  }catch(e){toast('Failed to load quota',false)}
+}
+
+/* Init */
+loadDash();
+/* Auto-refresh every 30s */
+setInterval(()=>{if(curPg==='dash')loadDash();if(curPg==='usage')loadUsg();if(curPg==='quota'&&typeof loadQuota==='function')loadQuota();},30000);
+/* Auto-refresh accounts every 15s */
+setInterval(()=>{loadAcct()},15000);
+</script>
+</body>
+</html>
