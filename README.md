@@ -1,96 +1,143 @@
-# Antigrafity Manager
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v1.0.0-8b5cf6?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/python-3.11%2B-8b5cf6?style=for-the-badge" alt="Python">
+  <img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/github/stars/ashkhfi/antigrafity-manager?style=for-the-badge&color=8b5cf6" alt="Stars">
+  <img src="https://img.shields.io/github/last-commit/ashkhfi/antigrafity-manager?style=for-the-badge&color=8b5cf6&label=updated" alt="Updated">
+</p>
 
-A standalone tool suite for managing, rotating, and monitoring Google Antigravity (Gemini Code Assist / Google Cloud Code Assist) accounts. No external dependencies — Python stdlib only.
+# <p align="center">⚡ Antigrafity Manager</p>
+<p align="center"><i>Standalone toolkit for managing multiple Google OAuth accounts with auto-rotation, quota tracking, and web dashboard</i></p>
 
-![GitHub](https://img.shields.io/badge/python-3.11%2B-blue)
-![GitHub](https://img.shields.io/badge/license-MIT-green)
+<p align="center">
+  <b>Zero external deps</b> &nbsp;·&nbsp; Python stdlib only &nbsp;·&nbsp; No npm/pip install needed
+</p>
 
-## Features
+<br>
 
-- **CLI** — Add new accounts via Google OAuth flow, auto-complete from browser callback
-- **Token Rotator** — Auto-switch accounts when rate-limited (429) or on errors; retry commands with the next healthy account
-- **Web Dashboard** — Modern SPA with command palette (⌘K), real-time quota tracking, session-limit meters, account switching
+---
 
-## Quick Install
+## 🚀 Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ashkhfi/antigrafity-manager/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ashkhfi/antigrafity-manager/v1.0.0/install.sh | bash
 ```
 
-Options:
-```bash
-# Skip antigravity-cli binary download
-curl -fsSL ... | bash -s -- --no-antigravity
+| Option | Description |
+|---|---|
+| `--no-antigravity` | Skip antigravity-cli binary download |
+| `--prefix ~/tools` | Custom install directory |
 
-# Custom install prefix
-curl -fsSL ... | bash -s -- --prefix ~/tools
-```
+> [!TIP]
+> Already installed? Run `agm-self-update` or re-run the curl command.
 
-## Tools
+---
+
+## 🧰 Tools
 
 | Command | Description | Requires |
 |---|---|---|
-| `ag` | CLI — add new accounts via Google OAuth | Python 3.11+ |
-| `agy` | Token rotator — auto-rotates on 429/errors | `agy.orig` (antigravity-cli binary) |
-| `agm-web` | Web dashboard launcher | Python 3.11+ |
-| `agm-self-update` | Re-run the installer to update | — |
+| `ag` | Add accounts via Google OAuth flow | Python 3.11+ |
+| `agy` | Token rotator — `--list`, `--switch`, auto-rotate | `agy.orig` binary |
+| `agm-web` | Web dashboard (port 8877) | Python 3.11+ |
+| `agm-self-update` | Re-run installer | — |
 
-## Usage
+### Version info
 
-### Web Dashboard
+All tools support `--version` / `-v`:
+
 ```bash
-agm-web
-# → http://localhost:8877
+ag --version       →  Antigrafity Manager v1.0.0
+agy --version      →  Antigrafity Manager v1.0.0
+agm-web --version  →  Antigrafity Manager v1.0.0
 ```
 
+---
+
+## 📖 Usage
+
+### Web Dashboard
+
+```bash
+agm-web                    # → http://localhost:8877
+agm-web --port 9000        # custom port
+agm-web --import-9router   # import from legacy SQLite DB
+```
+
+> Dashboard features: ⌘K command palette · real-time quota tracking · session-limit progress bars · per-account health · account switching · CLI reference page
+
 ### Add Account
+
 ```bash
 ag
 ```
-Opens Google OAuth URL → authorize → paste redirect URL back → account saved.
+
+1. Opens Google OAuth URL in browser
+2. Sign in → authorize → paste redirect URL back
+3. Account saved automatically to `~/.agm/accounts.json`
 
 ### Token Rotation
+
 ```bash
-agy --status            # Show current active account
-agy --list              # List all accounts
+agy --status            # Show current active account + rotation queue
+agy --list              # List all accounts with status
 agy --switch <email>    # Switch active account (no restart needed)
-agy <command> [args]    # Run command with auto-rotation on 429/errors
+agy <command> [args]    # Run with auto-rotate on 429/errors
 ```
 
-## Data
+> `agy` wraps antigravity-cli. On 429 or error, it automatically marks the token, picks the next healthy account, and retries. Zero downtime.
 
-All data stored at `~/.agm/`:
+### Systemd (auto-start)
 
-- `accounts.json` — Account registry with OAuth tokens (JSON v3)
-- `usage.db` — Daily quota/usage history (auto-populated by web dashboard)
-- `settings.json` — Rotation strategy and preferences
+```bash
+sudo systemctl enable --now agm-web
+```
 
-## Requirements
+---
 
-- Python 3.11+
-- Linux (macOS untested)
-- One Google Cloud Code Assist / Google One AI Pro subscription per account
-- `agy.orig` binary (required for `agy` token rotation) — auto-downloaded by installer, or install manually from [antigravity-cli releases](https://github.com/ashkhfi/antigrafity-manager/releases) and place at `~/.local/bin/agy.orig`
+## 📁 Data
 
-> **Note:** `agy` without `agy.orig` will print an installation reminder and exit. The other tools (`ag`, `agm-web`) work without it.
+Everything lives under `~/.agm/`:
 
-## Architecture
+```
+~/.agm/
+├── accounts.json   # Account registry + OAuth tokens (JSON v3)
+├── usage.db        # Daily quota/usage history (auto-populated)
+└── settings.json   # Rotation strategy & preferences
+```
+
+---
+
+## 🏗 Architecture
 
 ```
 ~/.local/bin/
-├── ag                   — CLI add-account (304 LOC)
-├── agy                  — Token rotator wrapper (213 LOC)
-├── agm-web              — Web launcher (<30 lines)
-├── agm_backend.py       — HTTP server (955 LOC, ThreadingHTTPServer)
-└── agm-dashboard.html   — SPA frontend (NEXUS design, ~500 LOC)
-
-~/.agm/
-├── accounts.json        — Account database
-├── usage.db             — Quota/usage tracking
-└── settings.json        — User preferences
+├── ag                   # CLI add-account
+├── agy                  # Token rotator wrapper
+├── agm-web              # Web launcher script
+├── agm_backend.py       # HTTP server (ThreadingHTTPServer)
+├── agm-dashboard.html   # SPA frontend (NEXUS design)
+└── agy.orig             # antigravity-cli binary
 ```
 
-## Build from Source
+> Full Python stdlib — zero pip/npm dependencies. Just the binary for `agy` token rotation.
+
+---
+
+## 📦 Releases
+
+| Version | Date | Notes |
+|---|---|---|
+| [v1.0.0](https://github.com/ashkhfi/antigrafity-manager/releases/tag/v1.0.0) | 2026-07-10 | Initial release — all tools, dashboard, rotation, systemd |
+
+```bash
+# Install specific version
+curl -fsSL https://raw.githubusercontent.com/ashkhfi/antigrafity-manager/v1.0.0/install.sh | bash
+```
+
+---
+
+## 🛠 From Source
 
 ```bash
 git clone https://github.com/ashkhfi/antigrafity-manager.git
@@ -98,6 +145,8 @@ cd antigrafity-manager
 ./install.sh
 ```
 
-## License
+---
 
-MIT
+<p align="center">
+  <sub>Built with ❤️ ·  Python stdlib only ·  No bloat</sub>
+</p>
