@@ -7,7 +7,6 @@ A standalone tool suite for managing, rotating, and monitoring Google Antigravit
 
 ## Features
 
-- **TUI** — Curses-based interactive dashboard with live account status, token refresh, and usage stats
 - **CLI** — Add new accounts via Google OAuth flow, auto-complete from browser callback
 - **Token Rotator** — Auto-switch accounts when rate-limited (429) or on errors; retry commands with the next healthy account
 - **Web Dashboard** — Modern SPA with command palette (⌘K), real-time quota tracking, session-limit meters, account switching
@@ -31,19 +30,12 @@ curl -fsSL ... | bash -s -- --prefix ~/tools
 
 | Command | Description |
 |---|---|
-| `agm` | Curses TUI — interactive account management |
 | `ag` | CLI — add new accounts via Google OAuth |
 | `agy` | Token rotator — wraps antigravity-cli, auto-rotates on errors |
 | `agm-web` | Web dashboard launcher |
 | `agm-self-update` | Re-run the installer to update |
 
 ## Usage
-
-### TUI
-```bash
-agm
-```
-Arrow keys to navigate. `q` to quit. Status indicators show active/error/quota-reached per account.
 
 ### Web Dashboard
 ```bash
@@ -82,7 +74,6 @@ All data stored at `~/.agm/`:
 
 ```
 ~/.local/bin/
-├── agm                  — Curses TUI (1304 LOC)
 ├── ag                   — CLI add-account (304 LOC)
 ├── agy                  — Token rotator wrapper (213 LOC)
 ├── agm-web              — Web launcher (<30 lines)
