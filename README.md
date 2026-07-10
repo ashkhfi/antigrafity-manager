@@ -28,12 +28,12 @@ curl -fsSL ... | bash -s -- --prefix ~/tools
 
 ## Tools
 
-| Command | Description |
-|---|---|
-| `ag` | CLI — add new accounts via Google OAuth |
-| `agy` | Token rotator — wraps antigravity-cli, auto-rotates on errors |
-| `agm-web` | Web dashboard launcher |
-| `agm-self-update` | Re-run the installer to update |
+| Command | Description | Requires |
+|---|---|---|
+| `ag` | CLI — add new accounts via Google OAuth | Python 3.11+ |
+| `agy` | Token rotator — auto-rotates on 429/errors | `agy.orig` (antigravity-cli binary) |
+| `agm-web` | Web dashboard launcher | Python 3.11+ |
+| `agm-self-update` | Re-run the installer to update | — |
 
 ## Usage
 
@@ -66,9 +66,11 @@ All data stored at `~/.agm/`:
 ## Requirements
 
 - Python 3.11+
-- Linux (macOS/userland untested)
+- Linux (macOS untested)
 - One Google Cloud Code Assist / Google One AI Pro subscription per account
-- Official `antigravity-cli` binary (for `agy` token rotation) — auto-downloaded by installer, or skip with `--no-antigravity`
+- `agy.orig` binary (required for `agy` token rotation) — auto-downloaded by installer, or install manually from [antigravity-cli releases](https://github.com/ashkhfi/antigrafity-manager/releases) and place at `~/.local/bin/agy.orig`
+
+> **Note:** `agy` without `agy.orig` will print an installation reminder and exit. The other tools (`ag`, `agm-web`) work without it.
 
 ## Architecture
 
