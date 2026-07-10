@@ -6,6 +6,13 @@ import json
 import hashlib
 from datetime import datetime, timezone
 
+from _update import check_update
+
+if '--version' in sys.argv or '-v' in sys.argv:
+    from _update import _read_local
+    print(f"Antigrafity Manager v{_read_local()}")
+    sys.exit(0)
+
 TOKEN_FILE = os.path.expanduser('~/.gemini/antigravity-cli/antigravity-oauth-token')
 DB_FILE = os.path.expanduser('~/.agm/accounts.json')
 ORIG_BIN = os.path.expanduser('~/.local/bin/agy.orig')
@@ -275,4 +282,5 @@ def main():
 
 
 if __name__ == '__main__':
+    check_update()
     main()

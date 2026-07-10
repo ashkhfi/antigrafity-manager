@@ -30,5 +30,8 @@ sys.path.insert(0, str(SCRIPT_DIR))
 # Import and run the backend
 from agm_backend import main
 
+from _update import check_update
+
 if __name__ == "__main__":
+    check_update()
     main()

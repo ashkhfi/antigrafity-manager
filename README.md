@@ -29,7 +29,31 @@ curl -fsSL https://raw.githubusercontent.com/ashkhfi/antigrafity-manager/v1.0.0/
 | `--prefix ~/tools` | Custom install directory |
 
 > [!TIP]
-> Already installed? Run `agm-self-update` or re-run the curl command.
+> Already installed? Run `agm-self-update` or re-run the curl command — tools auto-check for updates on every run.
+
+---
+
+## 📦 Updates
+
+Tools auto-check for new releases in background (once/day). When update found, you'll see:
+
+```
+  ⚡ Update available: v1.0.0 → v1.1.0
+     https://github.com/ashkhfi/antigrafity-manager/releases/tag/v1.1.0
+     Run: agm-self-update
+```
+
+### Manual update
+```bash
+agm-self-update                  # auto-download latest main
+agm-self-update --check          # check version without updating
+curl -fsSL .../install.sh | bash # re-run installer (same)
+```
+
+### Check version
+```bash
+ag --version   # or agy --version / agm-web --version
+```
 
 ---
 
