@@ -261,6 +261,16 @@ def process_code(code):
     return conn_id
 
 def main():
+    if '--version' in sys.argv or '-v' in sys.argv:
+        VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
+        try:
+            with open(VERSION_FILE) as f:
+                ver = f.read().strip().split("=")[1].strip('"')
+        except Exception:
+            ver = "dev"
+        print(f"Antigrafity Manager v{ver}")
+        sys.exit(0)
+
     if len(sys.argv) > 1:
         # Mode manual: langsung proses code
         input_str = " ".join(sys.argv[1:])

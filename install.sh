@@ -8,7 +8,7 @@
 # Options:
 #   --no-antigravity   Skip antigravity-cli binary download
 #   --prefix <dir>     Install to <dir> instead of ~/.local/bin
-#   --version <tag>    Install a specific release tag instead of main
+#   --version <tag>    Install a specific release tag (e.g. v1.0.0) instead of main
 
 set -euo pipefail
 
@@ -33,7 +33,7 @@ while [[ $# -gt 0 ]]; do
       echo "Options:"
       echo "  --no-antigravity   Skip antigravity-cli binary download"
       echo "  --prefix <dir>     Install to <dir> (default: ~/.local/bin)"
-      echo "  --version <tag>    Install from a tag/branch (default: main)"
+      echo "  --version <tag>    Install a specific release tag (e.g. v1.0.0) instead of main"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -90,7 +90,12 @@ install_antigravity() {
   local os; os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   case "${arch}" in x86_64) arch="amd64" ;; aarch64) arch="arm64" ;; armv7l) arch="arm" ;; esac
 
-  local url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/antigravity-cli_${os}_${arch}.tar.gz"
+  local url
+  if [[ "${REPO_BRANCH}" =~ ^v ]]; then
+    url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${REPO_BRANCH}/antigravity-cli_${os}_${arch}.tar.gz"
+  else
+    url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/antigravity-cli_${os}_${arch}.tar.gz"
+  fi
   local tmpdir; tmpdir="$(mktemp -d)"
 
   echo "  ↓ ${url}"

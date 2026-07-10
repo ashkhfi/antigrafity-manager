@@ -12,6 +12,17 @@ Usage:
 import sys
 from pathlib import Path
 
+# ── Version ──
+VERSION_FILE = Path(__file__).resolve().parent / "VERSION"
+try:
+    VERSION = VERSION_FILE.read_text().strip().split("=")[1].strip('"')
+except Exception:
+    VERSION = "dev"
+
+if '--version' in sys.argv or '-v' in sys.argv:
+    print(f"Antigrafity Manager v{VERSION}")
+    sys.exit(0)
+
 # Add script directory to path
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
