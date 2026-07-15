@@ -30,7 +30,7 @@ echo "AGM_VERSION=\"${TAG#v}\"" > VERSION
 # Build release tarball (safe files only)
 echo "Building tarball..."
 tar czf "$TMPDIR/agm-${TAG}.tar.gz" \
-    ag agy agy.orig agm-web agm_backend.py agm-dashboard.html VERSION
+    ag agy agm-web agm_backend.py agm-dashboard.html VERSION
 
 echo "Contents:"
 tar tzf "$TMPDIR/agm-${TAG}.tar.gz"
